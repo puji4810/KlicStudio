@@ -16,6 +16,7 @@ func SetupRouter(r *gin.Engine) {
 		api.POST("/capability/subtitleTask", hdl.StartSubtitleTask)
 		api.GET("/capability/subtitleTask", hdl.GetSubtitleTask)
 		api.POST("/file", hdl.UploadFile)
+		api.GET("/file_check", hdl.CheckFileExist)
 		api.GET("/file/*filepath", hdl.DownloadFile)
 	}
 

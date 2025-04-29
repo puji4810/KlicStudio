@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"krillin-ai/internal/dto"
 	"krillin-ai/internal/response"
+	"net/http"
 	"os"
 	"path/filepath"
 )
@@ -66,16 +67,6 @@ func (h Handler) GetSubtitleTask(c *gin.Context) {
 
 func (h Handler) UploadFile(c *gin.Context) {
 	// 获取文件和哈希值
-	file, err := c.FormFile("file")
-	if err != nil {
-		response.R(c, response.Response{
-			Error: -1,
-			Msg:   "未能获取文件",
-			Data:  nil,
-		})
-		return
-	}
-
 	hash := c.PostForm("hash")
 	if hash == "" {
 		response.R(c, response.Response{
@@ -98,6 +89,16 @@ func (h Handler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.R(c, response.Response{
+			Error: -1,
+			Msg:   "未能获取文件",
+			Data:  nil,
+		})
+		return
+	}
+
 	// 保存文件
 	if err = c.SaveUploadedFile(file, savePath); err != nil {
 		response.R(c, response.Response{
@@ -114,6 +115,20 @@ func (h Handler) UploadFile(c *gin.Context) {
 		Data:  gin.H{"file_path": "local:" + savePath},
 	})
 
+}
+
+func (h Handler) CheckFileExist(c *gin.Context) {
+	hash := c.Query("hash")
+	if hash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"exists": false})
+		return
+	}
+	savePath := "./uploads/" + hash
+	if _, err := os.Stat(savePath); err == nil {
+		c.JSON(http.StatusOK, gin.H{"exists": true, "path": "local:" + savePath})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"exists": false})
+	}
 }
 
 func (h Handler) DownloadFile(c *gin.Context) {

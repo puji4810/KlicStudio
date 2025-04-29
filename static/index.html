@@ -680,30 +680,44 @@
 		uploadStatus.classList.remove('hidden');
 		executeButton.disabled = true; // 禁用“执行”按钮
 
-		const file = fileInput.files[0];
-
-		// 计算上传文件的哈希值
-		const hash = await calculateFileHash(file);
-
-		const formData = new FormData();
-		formData.append('file', file);
-		formData.append('hash', hash); // Include hash in the upload
+		const uploadedVideoUrls = []; // 存储所有上传成功的视频地址
 
 		try {
-			const response = await fetch(API_UPLOAD_URL, {
-				method: 'POST',
-				body: formData,
-			});
-			if (!response.ok) throw new Error('视频上传失败');
-			const res = await response.json();
-			const { error, data, msg } = res || {};
-			if (error !== 0 && error !== 200) {
-				throw new Error(msg || '上传失败，请重试');
+			for (const file of fileInput.files) {
+				// 计算上传文件的哈希值
+				const hash = await calculateFileHash(file);
+
+				const checkRes = await fetch(`/api/file_check?hash=${hash}`);
+				const checkResult = await checkRes.json();
+
+				if (checkResult.exists && checkResult.path) {
+					console.log(`文件 ${file.name} 已存在，跳过上传`);
+					uploadedVideoUrls.push(checkResult.path);
+					continue; // 跳过上传
+				}
+
+				const formData = new FormData();
+				formData.append('file', file);
+				formData.append('hash', hash);
+
+				const response = await fetch(API_UPLOAD_URL, {
+					method: 'POST',
+					body: formData,
+				});
+
+				if (!response.ok) throw new Error('上传失败');
+				const res = await response.json();
+				const { error, data, msg } = res || {};
+				if (error !== 0 && error !== 200) {
+					throw new Error(msg || '上传失败，请重试');
+				}
+
+				uploadedVideoUrls.push(data.file_path); // 保存每个文件的上传地址
 			}
-			uploadedVideoUrl = data.file_path; // 获取返回的视频地址
+
+			uploadedVideoUrl = uploadedVideoUrls; // 更新全局变量
 			executeButton.disabled = false; // 启用“执行”按钮
 		} catch (error) {
-			console.error('视频上传失败:', error);
 			alert(error.message || '上传失败，请重试');
 		} finally {
 			uploadStatus.classList.add('hidden');
@@ -712,11 +726,23 @@
 
 	// 计算文件的哈希值
 	async function calculateFileHash(file) {
-		const arrayBuffer = await file.arrayBuffer();
-		const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-		return Array.from(new Uint8Array(hashBuffer))
-				.map(b => b.toString(16).padStart(2, '0'))
-				.join('');
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = function(event) {
+				const buffer = event.target.result;
+				const uint8 = new Uint8Array(buffer);
+				let hash = 5381;
+				for (let i = 0; i < uint8.length; i++) {
+					hash = ((hash << 5) + hash) + uint8[i]; // hash * 33 + c
+				}
+				// 返回 8 位十六进制字符串
+				resolve(hash >>> 0); // 转为无符号整数
+			};
+			reader.onerror = function() {
+				reject('文件读取失败');
+			};
+			reader.readAsArrayBuffer(file);
+		});
 	}
 
 	// 处理音频上传
