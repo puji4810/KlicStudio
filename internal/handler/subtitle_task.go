@@ -65,7 +65,8 @@ func (h Handler) GetSubtitleTask(c *gin.Context) {
 }
 
 func (h Handler) UploadFile(c *gin.Context) {
-	form, err := c.MultipartForm()
+	// 获取文件和哈希值
+	file, err := c.FormFile("file")
 	if err != nil {
 		response.R(c, response.Response{
 			Error: -1,
@@ -75,36 +76,44 @@ func (h Handler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	files := form.File["file"]
-	if len(files) == 0 {
+	hash := c.PostForm("hash")
+	if hash == "" {
 		response.R(c, response.Response{
 			Error: -1,
-			Msg:   "未上传任何文件",
+			Msg:   "缺少文件哈希值",
 			Data:  nil,
 		})
 		return
 	}
 
-	// 保存每个文件
-	var savedFiles []string
-	for _, file := range files {
-		savePath := "./uploads/" + file.Filename
-		if err := c.SaveUploadedFile(file, savePath); err != nil {
-			response.R(c, response.Response{
-				Error: -1,
-				Msg:   "文件保存失败: " + file.Filename,
-				Data:  nil,
-			})
-			return
-		}
-		savedFiles = append(savedFiles, "local:"+savePath)
+	// 检查文件是否已存在
+	savePath := "./uploads/" + hash
+	if _, err := os.Stat(savePath); err == nil {
+		// 文件已存在
+		response.R(c, response.Response{
+			Error: 0,
+			Msg:   "文件已存在",
+			Data:  gin.H{"file_path": "local:" + savePath},
+		})
+		return
+	}
+
+	// 保存文件
+	if err = c.SaveUploadedFile(file, savePath); err != nil {
+		response.R(c, response.Response{
+			Error: -1,
+			Msg:   "文件保存失败",
+			Data:  nil,
+		})
+		return
 	}
 
 	response.R(c, response.Response{
 		Error: 0,
 		Msg:   "文件上传成功",
-		Data:  gin.H{"file_path": savedFiles},
+		Data:  gin.H{"file_path": "local:" + savePath},
 	})
+
 }
 
 func (h Handler) DownloadFile(c *gin.Context) {

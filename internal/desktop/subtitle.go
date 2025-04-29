@@ -9,6 +9,7 @@ import (
 	"krillin-ai/internal/api"
 	"krillin-ai/internal/handler"
 	"krillin-ai/log"
+	"krillin-ai/pkg/util"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -84,11 +85,25 @@ func (sm *SubtitleManager) ShowFileDialog() {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", reader.URI().Name())
+		log.GetLogger().Info("reader.URI().Name()", zap.String("name", reader.URI().Name()))
 		if err != nil {
 			dialog.ShowError(err, sm.window)
 			return
 		}
 		_, err = io.Copy(part, reader)
+		if err != nil {
+			dialog.ShowError(err, sm.window)
+			return
+		}
+
+		// 计算哈希值
+		hash, err := util.CalculateFileHash(reader.URI().Path())
+		if err != nil {
+			dialog.ShowError(err, sm.window)
+			return
+		}
+
+		err = writer.WriteField("hash", hash)
 		if err != nil {
 			dialog.ShowError(err, sm.window)
 			return
@@ -106,7 +121,7 @@ func (sm *SubtitleManager) ShowFileDialog() {
 			Error int    `json:"error"`
 			Msg   string `json:"msg"`
 			Data  struct {
-				FilePath []string `json:"file_path"`
+				FilePath string `json:"file_path"`
 			} `json:"data"`
 		}
 
@@ -121,7 +136,7 @@ func (sm *SubtitleManager) ShowFileDialog() {
 		}
 
 		if sm.onVideoSelected != nil {
-			sm.onVideoSelected(result.Data.FilePath[0])
+			sm.onVideoSelected(result.Data.FilePath)
 		}
 	}, sm.window)
 }
